@@ -47,7 +47,7 @@ spClient.RemoteCall("someChannel", "Foo");
 ```
 
 ### Used libraries:
-NLog
+NLog,
 MessagePack serializer
 
 Some parts used from NLC Framework (delegate serialization)
