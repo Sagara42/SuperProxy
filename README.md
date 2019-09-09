@@ -39,7 +39,7 @@ public class TestHostedObject
 ### Client(node 2 example) side:
 
 ```C#
-var spClient = new SpClient(new TestHostedObject(), "someChannel"); //here we install self hosted object with shared function`s on channel
+var spClient = new SpClient();
 spClient.Connect("127.0.0.1", 6669);
 spClient.Publish("testChannel" /*some argumets here*/); //that callback will receive all subsribed clients on 'testChannel'
 
