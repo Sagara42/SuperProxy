@@ -37,7 +37,6 @@ namespace SuperProxy.Extensions
                 var diff = bytesPerRow - bytesInThisRow;
                 if (diff > 0)
                 {
-
                     var cnt = diff + diff / bytesPerBlock;
                     if (diff % bytesPerBlock > 0)
                         cnt++;
@@ -48,7 +47,6 @@ namespace SuperProxy.Extensions
 
                 for (int k = 0; k < bytesInThisRow; k++)
                 {
-
                     char res = (char)data[currentCount + k];
                     if (res > 0x1f && res < 0x80)
                         builder.Append(res);

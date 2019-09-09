@@ -6,10 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="1.7.3.7" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Commons\Commons.csproj" />
+    <PackageReference Include="MessagePackAnalyzer" Version="1.7.3.7" />
+    <PackageReference Include="NLog" Version="4.6.7" />
   </ItemGroup>
 
 </Project>

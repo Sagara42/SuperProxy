@@ -1,7 +1,7 @@
-﻿using Commons.Extensions;
-using MessagePack;
+﻿using MessagePack;
 using MessagePack.Resolvers;
 using NLog;
+using SuperProxy.Extensions;
 using SuperProxy.Network.Attributes;
 using SuperProxy.Network.Events;
 using SuperProxy.Network.Messages;
@@ -81,8 +81,7 @@ namespace SuperProxy.Network
             if (remoteEvent.Type != RemoteMethodType.CALL && remoteEvent.Type != RemoteMethodType.MOVE)
                 return;
 
-            if (!_mountedHostedMethods.TryGetValue(remoteEvent.MethodName, out var targetMethod)) ;
-            else
+            if (_mountedHostedMethods.TryGetValue(remoteEvent.MethodName, out var targetMethod))
             {
                 var resultHeader = RemoteMethodType.RETURN;
                 var parameters = new List<object>();
@@ -206,8 +205,6 @@ namespace SuperProxy.Network
 
                 Socket.BeginReceive(WaitPacketLength, 0, WaitPacketLength.Length, SocketFlags.None, ServerMessageCallback, null);
 
-                Thread.Sleep(1000);
-
                 _log.Info($"Connected to channel {_rmiChannel}");
             }
             catch
@@ -252,7 +249,6 @@ namespace SuperProxy.Network
                                 break;
                         }
                     });
-
                     Socket.BeginReceive(WaitPacketLength, 0, WaitPacketLength.Length, SocketFlags.None, ServerMessageCallback, null);
                 }
                 else
@@ -260,15 +256,13 @@ namespace SuperProxy.Network
                     Thread.Sleep(1);
                     Socket.BeginReceive(WaitPacketLength, 0, WaitPacketLength.Length, SocketFlags.None, ServerMessageCallback, null);
                 }
-
             }
             catch (ObjectDisposedException)
             {
-
             }
-            catch
+            catch (Exception ex)
             {
-
+                _log.Warn($"Error while receive message:\n{ex}");
             }
         }
 
@@ -317,7 +311,6 @@ namespace SuperProxy.Network
                 }
                 catch
                 {
-
                 }
             });   
         }
@@ -346,7 +339,7 @@ namespace SuperProxy.Network
             }
             catch(Exception ex)
             {
-                
+                _log.Warn($"Error while message has serialized:\n{ex}");
             }
             return null;
         }

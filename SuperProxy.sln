@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29215.179
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SuperProxy", "SuperProxy.csproj", "{FA28348E-76C3-4D72-827A-5AB5C790FEA9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{F68769F2-68DE-4FB3-8431-B0FE427AF248}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SupeProxyClient", "SupeProxyClient", "{8D4AFDBD-A039-4075-B931-B5D997DDAB5C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SuperProxyServer", "SuperProxyServer", "{7F8F286B-82F2-4750-B6A4-7167E6DB44CD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FA28348E-76C3-4D72-827A-5AB5C790FEA9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA28348E-76C3-4D72-827A-5AB5C790FEA9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA28348E-76C3-4D72-827A-5AB5C790FEA9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA28348E-76C3-4D72-827A-5AB5C790FEA9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8D4AFDBD-A039-4075-B931-B5D997DDAB5C} = {F68769F2-68DE-4FB3-8431-B0FE427AF248}
+		{7F8F286B-82F2-4750-B6A4-7167E6DB44CD} = {F68769F2-68DE-4FB3-8431-B0FE427AF248}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C845E3DB-33C9-4F55-AAD1-A9C585348AF2}
+	EndGlobalSection
+EndGlobal
