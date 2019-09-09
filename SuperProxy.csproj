@@ -5,6 +5,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Examples\**" />
+    <EmbeddedResource Remove="Examples\**" />
+    <None Remove="Examples\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MessagePack" Version="1.7.3.7" />
     <PackageReference Include="MessagePackAnalyzer" Version="1.7.3.7" />
     <PackageReference Include="NLog" Version="4.6.7" />

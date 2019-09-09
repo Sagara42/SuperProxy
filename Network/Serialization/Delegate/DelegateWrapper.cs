@@ -85,12 +85,20 @@ namespace SuperProxy.Network.Serialization.Delegate
                     {
                         isField = true;
                         property = activeFields.First(s => s.Name == keyName).FieldType;
-                        activated.GetType().GetField(keyName).SetValue(activated, Convert.ChangeType(kv.Value, property));
+
+                        if (property.Equals(typeof(Guid)))
+                            activated.GetType().GetField(keyName).SetValue(activated, Guid.Parse(kv.Value.ToString()));
+                        else
+                            activated.GetType().GetField(keyName).SetValue(activated, Convert.ChangeType(kv.Value, property));
                     }
                     else if (activeProps.Any(s => s.Name == keyName))
                     {
                         property = activeProps.First(s => s.Name == keyName).PropertyType;
-                        activated.GetType().GetProperty(keyName).SetValue(activated, Convert.ChangeType(kv.Value, property));
+
+                        if (property.Equals(typeof(Guid)))                        
+                            activated.GetType().GetProperty(keyName).SetValue(activated, Guid.Parse(kv.Value.ToString()));                       
+                        else
+                            activated.GetType().GetProperty(keyName).SetValue(activated, Convert.ChangeType(kv.Value, property));
                     }
                 }
                 catch (InvalidCastException)

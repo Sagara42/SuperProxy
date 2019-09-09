@@ -98,6 +98,9 @@ namespace SuperProxy.Network
 
                     if (isGenericType)
                         parameters[i] = localParameter.ConvertProperties((Dictionary<object, object>)parameters[i]);
+                    else
+                        parameters[i] = Convert.ChangeType(parameters[i], localParameter);
+            
                 }
 
                 var result = await targetMethod.Method.InvokeWrapper(targetMethod.HasAsyncResult, _selfHosted, parameters.ToArray());
