@@ -1,22 +1,22 @@
 [![CodeFactor](https://www.codefactor.io/repository/github/sagara42/superproxy/badge)](https://www.codefactor.io/repository/github/sagara42/superproxy)
 
-#Super Proxy
+# Super Proxy
 Network communication based on RMI/RPC between clients (nodes)
 
-##Functional
+## Functional
 Any node can host own object to provide inside functions for all another node`s
 Also, node`s can subscribe on remote events
 
-##How it works (examples)
+## How it works (examples)
 
-###Server side:
+### Server side:
 
 ```C#
 var spServer = new SpServer();
 spServer.Initialize("127.0.0.1", 6669, 5, 15, 3);
 ```
 
-###Client(node 1 example) side:
+### Client(node 1 example) side:
 
 ```C#
 var spClient = new SpClient(new TestHostedObject(), "someChannel"); //here we install self hosted object with shared function`s on channel
@@ -36,7 +36,7 @@ public class TestHostedObject
 }
 ```
 
-###Client(node 2 example) side:
+### Client(node 2 example) side:
 
 ```C#
 var spClient = new SpClient(new TestHostedObject(), "someChannel"); //here we install self hosted object with shared function`s on channel
@@ -46,7 +46,7 @@ spClient.Publish("testChannel" /*some argumets here*/); //that callback will rec
 spClient.RemoteCall("someChannel", "Foo");
 ```
 
-###Used libraries:
+### Used libraries:
 NLog
 MessagePack serializer
 
