@@ -1,7 +1,10 @@
-﻿using System;
+﻿using NLog;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Numerics;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -12,6 +15,8 @@ namespace SuperProxy.Network.Serialization.Delegate
     /// </summary>
     public static class DelegateWrapper
     {
+        private static readonly Logger Log = LogManager.GetCurrentClassLogger();
+
         public static async Task<object> InvokeWrapper(this Func<object, object[], object> Method, bool HasAsyncResult, object Target, params object[] Args)
         {
             var Result = Method(Target, Args);
@@ -66,11 +71,23 @@ namespace SuperProxy.Network.Serialization.Delegate
             return paramsExps;
         }
 
-        public static object ConvertProperties(this Type hostedType, Dictionary<object, object> objs)
+        public static object ConvertProperties(this Type hostedType, Dictionary<object, object> objs, int index = 0, bool isArr = false)
         {
             var activated = Activator.CreateInstance(hostedType);
-            var activeFields = activated.GetType().GetFields();
-            var activeProps = activated.GetType().GetProperties();
+            IList implicitArray = null;
+            object linkToObject = null;
+            FieldInfo[] activeFields = null;
+            PropertyInfo[] activeProps = null;
+
+            if (isArr)
+            {
+                implicitArray = activated as IList;
+                implicitArray.Add(Activator.CreateInstance(activated.GetType().GetGenericArguments().Single()));
+            }
+
+            linkToObject = isArr ? implicitArray[index] : activated;
+            activeFields = isArr ? implicitArray[index].GetType().GetFields() : activated.GetType().GetFields();
+            activeProps = isArr ? implicitArray[index].GetType().GetProperties() : activated.GetType().GetProperties();
 
             foreach (var kv in objs)
             {
@@ -87,26 +104,60 @@ namespace SuperProxy.Network.Serialization.Delegate
                         property = activeFields.First(s => s.Name == keyName).FieldType;
 
                         if (property.Equals(typeof(Guid)))
-                            activated.GetType().GetField(keyName).SetValue(activated, Guid.Parse(kv.Value.ToString()));
+                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, Guid.Parse(kv.Value.ToString()));
+                        else if (property.Equals(typeof(Vector3)))
+                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, (Vector3)kv.Value);//TODO: Test this!     
+                        else if (property.IsEnum)
+                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, Enum.Parse(property, kv.Value.ToString()));
                         else
-                            activated.GetType().GetField(keyName).SetValue(activated, Convert.ChangeType(kv.Value, property));
+                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, Convert.ChangeType(kv.Value, property));
+
                     }
                     else if (activeProps.Any(s => s.Name == keyName))
                     {
                         property = activeProps.First(s => s.Name == keyName).PropertyType;
 
-                        if (property.Equals(typeof(Guid)))                        
-                            activated.GetType().GetProperty(keyName).SetValue(activated, Guid.Parse(kv.Value.ToString()));                       
+                        if (property.Equals(typeof(Guid)))
+                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, Guid.Parse(kv.Value.ToString()));
+                        else if (property.Equals(typeof(Vector3)))
+                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, (Vector3)kv.Value);//TODO: Test this!             
+                        else if (property.IsEnum)
+                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, Enum.Parse(property, kv.Value.ToString()));
                         else
-                            activated.GetType().GetProperty(keyName).SetValue(activated, Convert.ChangeType(kv.Value, property));
+                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, Convert.ChangeType(kv.Value, property));
                     }
                 }
                 catch (InvalidCastException)
                 {
-                    if (isField)
-                        activated.GetType().GetField(keyName).SetValue(activated, ConvertProperties(property, (Dictionary<object, object>)kv.Value));
-                    else
-                        activated.GetType().GetProperty(keyName).SetValue(activated, ConvertProperties(property, (Dictionary<object, object>)kv.Value));
+                    try
+                    {
+                        if (isField)                       
+                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, ConvertProperties(property, (Dictionary<object, object>)kv.Value, 0, isArr));                      
+                        else
+                        {
+                            if (kv.Value is object[] castAsArr)
+                            {
+                                var list = (IList)Activator.CreateInstance(property.GetGenericTypeDefinition().MakeGenericType(property.GetGenericArguments().Single()));
+                                for (int i = 0; i < castAsArr.Length; i++)
+                                {
+                                    var converted = ConvertProperties(property, (Dictionary<object, object>)castAsArr[i], 0, true) as IList;
+                                    list.Add(converted[0]);
+                                }
+
+                                linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, list);
+                            }
+                            else if (kv.Value is Dictionary<object, object> castAsDict)
+                                linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, ConvertProperties(property, castAsDict));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
                 }
             }
 

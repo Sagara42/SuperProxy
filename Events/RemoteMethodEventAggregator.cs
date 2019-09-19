@@ -81,5 +81,17 @@ namespace SuperProxy.Events
             _log.Debug($"Client {methodProvider.Client.Socket.RemoteEndPoint.ToString()} unsubscribed from RemoteEvent: {channel} channel.");
 #endif
         }
+
+        public static void UnsubscribeFromAllChannels(SPClient client)
+        {
+            client.ReadyForRMI = false;
+            if(_subscribersInfo.Any(s => s.Value.Exists(e => e.Client == client)))
+            {
+                var toRemove = _subscribersInfo.Where(s => s.Value.Where(e => e.Client == client).Any()).ToList();
+                if (toRemove.Any())
+                    for (int i = 0; i < toRemove.Count; i++)
+                        _subscribersInfo.Remove(toRemove[i].Key, out _);
+            }
+        }
     }
 }

@@ -115,8 +115,9 @@ namespace SuperProxy.Network
                     while (r < packetDataBuffer.Length)
                         r += connection.Socket.Receive(packetDataBuffer, r, packetDataBuffer.Length - r, SocketFlags.None);
 
+#if DEBUG
                     _log.Debug($"Data received:\n{packetDataBuffer.FormatHex()}");
-
+#endif
                     ThreadPool.QueueUserWorkItem((callback) => 
                     {
                         var message = MessagePackSerializer.Deserialize<IMessageEvent>(packetDataBuffer);
@@ -141,6 +142,12 @@ namespace SuperProxy.Network
                             case RemoteMethodEvent remoteEvent:
                                 RemoteMethodEventAggregator.Publish(remoteEvent, connection);
                                 break;
+                            case ReplicationListUpdateEvent repListEvent:
+                                ReplicationEventAggregator.DispatchGenericReplicationInfo(connection, repListEvent);
+                                break;
+                            case ReplicationNotyfiEvent repNotyfi:
+                                ReplicationEventAggregator.SetReplicationInfo(connection, repNotyfi.Channel, repNotyfi.ObjectsToReplicate);
+                                break;
                         }
                     });
                 }
@@ -154,6 +161,7 @@ namespace SuperProxy.Network
             }
             catch (ObjectDisposedException)
             {
+                connection.ReadyForRMI = false;
             }
             catch (Exception e)
             {
@@ -169,6 +177,7 @@ namespace SuperProxy.Network
             try
             {
                 EventAggregator.UnsubscribeFromAllChannels(client);
+                RemoteMethodEventAggregator.UnsubscribeFromAllChannels(client);
 
                 client.Reset();
                 client.Socket.BeginDisconnect(false, EndDisconect, client);

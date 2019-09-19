@@ -10,6 +10,7 @@ using SuperProxy.Network.Serialization.Delegate;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -37,6 +38,8 @@ namespace SuperProxy.Network
 
         private ConcurrentDictionary<string, RemoteEventWait> _remoteMethodCallbacks;
 
+        private List<string> _remoteReplicationObjects;
+
         private readonly SemaphoreSlim _sockSem;
 
         public SPClient()
@@ -47,6 +50,7 @@ namespace SuperProxy.Network
             _subsribedActions = new ConcurrentDictionary<string, Action<PublishEvent>>();
             _remoteMethodCallbacks = new ConcurrentDictionary<string, RemoteEventWait>();
             _mountedHostedMethods = new ConcurrentDictionary<string, RemoteMethodEvent>();
+            _remoteReplicationObjects = new List<string>();
             _sockSem = new SemaphoreSlim(1, 1);
             _rmiChannel = "";
         }
@@ -192,7 +196,38 @@ namespace SuperProxy.Network
                     }); 
                 }
             }
+
+            foreach(var field in _selfHosted.GetType().GetProperties())
+            {
+                if(field.GetCustomAttribute(typeof(SPGenericReplicationAttribute)) is SPGenericReplicationAttribute attribute)
+                {
+                    if (field.PropertyType.IsGenericType)
+                    {
+                        var installClient = field.PropertyType.GetMethod("InstallClient");
+                        var activatedProperty = Activator.CreateInstance(field.PropertyType);
+
+                        installClient.Invoke(activatedProperty, new object[] { this, attribute.ObjectName });
+
+                        _selfHosted.GetType().GetProperty(field.Name).SetValue(_selfHosted, activatedProperty);
+                        _remoteReplicationObjects.Add(attribute.ObjectName);
+                    }
+                }
+            }
         }
+        #endregion
+
+        #region Replication methods
+
+        public void RemoteListWillUpdate(NotifyCollectionChangedEventArgs ev, string objectName) => SendData(SerializeMessagePackToFrame(new ReplicationListUpdateEvent() { Channel = _rmiChannel, ObjectName = objectName, NewItems = ev.NewItems, OldItems = ev.OldItems }));
+        
+        private void ListUpdateEvent(ReplicationListUpdateEvent ev)
+        {
+            var prop = _selfHosted.GetType().GetProperties().FirstOrDefault(s =>
+            s.GetCustomAttribute(typeof(SPGenericReplicationAttribute)) != null &&
+            s.GetCustomAttribute<SPGenericReplicationAttribute>().ObjectName == ev.ObjectName).PropertyType;
+            //TODO! Update local hosted object
+        }
+
         #endregion
 
         #region Network 
@@ -206,11 +241,14 @@ namespace SuperProxy.Network
                 if (_mountedHostedMethods != null && _mountedHostedMethods.Count > 0)
                     NotyfiServerAboutReadyForRMI();
 
+                if (_remoteReplicationObjects != null && _remoteReplicationObjects.Count > 0)
+                    NotyfiServerAboutReplicationInfos();
+
                 Socket.BeginReceive(WaitPacketLength, 0, WaitPacketLength.Length, SocketFlags.None, ServerMessageCallback, null);
 
                 _log.Info($"Connected to channel {_rmiChannel}");
             }
-            catch
+            catch(Exception ex)
             {
                 _log.Warn($"Cant connect to {host}:{port} reconnecting!");
                 Connect(host, port);
@@ -250,6 +288,9 @@ namespace SuperProxy.Network
                             case RemoteMethodEvent remoteEvent:
                                 RMIMethodCalled(remoteEvent);
                                 break;
+                            case ReplicationListUpdateEvent replicationListEvent:
+                                ListUpdateEvent(replicationListEvent);
+                                break;
                         }
                     });
                     Socket.BeginReceive(WaitPacketLength, 0, WaitPacketLength.Length, SocketFlags.None, ServerMessageCallback, null);
@@ -276,6 +317,8 @@ namespace SuperProxy.Network
         }
 
         private void NotyfiServerAboutReadyForRMI() => SendData(SerializeMessagePackToFrame(new RMINotyfiEvent() { Channel = _rmiChannel, MethodNames = _mountedHostedMethods.Keys.ToArray() }));
+
+        private void NotyfiServerAboutReplicationInfos() => SendData(SerializeMessagePackToFrame(new ReplicationNotyfiEvent() { Channel = _rmiChannel, ObjectsToReplicate = _remoteReplicationObjects }));
        
         public void SentRemoteMethodCall(RemoteMethodEvent remoteEvent) => SendData(SerializeMessagePackToFrame(remoteEvent));
 
@@ -317,6 +360,24 @@ namespace SuperProxy.Network
                 }
             });   
         }
+
+        public void ReplicationListUpdate(ReplicationListUpdateEvent updateInfo)
+        {
+            ThreadPool.QueueUserWorkItem((callback) =>
+            {
+                try
+                {
+                    SendData(SerializeMessagePackToFrame(updateInfo));
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+                catch
+                {
+                }
+            });
+        }
+
         #endregion
 
         #region Serialization
