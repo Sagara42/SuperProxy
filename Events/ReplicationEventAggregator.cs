@@ -29,5 +29,25 @@ namespace SuperProxy.Events
                     ri.Key.ReplicationListUpdate(genericReplicationInfo);
             }
         }
+
+        public static void DispatchPrimitiveReplicationInfo(SPClient client, ReplicationPrimitiveUpdateEvent ev)
+        {
+            var objectName = ev.ObjectName;
+
+            foreach (var ri in _replicationInfos)
+            {
+                if (ri.Key.Equals(client))
+                    continue;
+
+                if (ri.Value.Contains(objectName))
+                    ri.Key.PrimitiveWillUpdate(ev.ObjectName, ev.Value);
+            }
+        }
+
+        public static void ReleaseClient(SPClient client)
+        {
+            if (_replicationInfos.ContainsKey(client))
+                _replicationInfos.Remove(client, out _);
+        }
     }
 }

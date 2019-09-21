@@ -1,4 +1,5 @@
 ﻿using NLog;
+using SuperProxy.Extensions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -92,68 +93,53 @@ namespace SuperProxy.Network.Serialization.Delegate
             foreach (var kv in objs)
             {
                 var keyName = kv.Key.ToString();
-                var isField = false;
+                var valueType = kv.Value?.GetType();
 
-                Type property = null;
+                Type property = activeProps.Any(s => s.Name == keyName) ? activeProps.FirstOrDefault(s => s.Name == keyName)?.PropertyType : activeFields.FirstOrDefault(s => s.Name == keyName)?.FieldType;
 
+                PropField propInfo = null;
+
+                if (activeProps.Any(s => s.Name == keyName))
+                    propInfo = new PropField(linkToObject.GetType().GetProperty(keyName));
+                else if(activeFields.Any(s => s.Name == keyName))
+                    propInfo = new PropField(linkToObject.GetType().GetField(keyName));
+
+                if(property == null)               
+                    continue;
+                
                 try
                 {
-                    if (activeFields.Any(s => s.Name == keyName))
+                    if (valueType != null && valueType.IsGenericType || property.IsGenericType)
                     {
-                        isField = true;
-                        property = activeFields.First(s => s.Name == keyName).FieldType;
-
-                        if (property.Equals(typeof(Guid)))
-                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, Guid.Parse(kv.Value.ToString()));
-                        else if (property.Equals(typeof(Vector3)))
-                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, (Vector3)kv.Value);//TODO: Test this!     
-                        else if (property.IsEnum)
-                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, Enum.Parse(property, kv.Value.ToString()));
-                        else
-                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, Convert.ChangeType(kv.Value, property));
-
-                    }
-                    else if (activeProps.Any(s => s.Name == keyName))
-                    {
-                        property = activeProps.First(s => s.Name == keyName).PropertyType;
-
-                        if (property.Equals(typeof(Guid)))
-                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, Guid.Parse(kv.Value.ToString()));
-                        else if (property.Equals(typeof(Vector3)))
-                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, (Vector3)kv.Value);//TODO: Test this!             
-                        else if (property.IsEnum)
-                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, Enum.Parse(property, kv.Value.ToString()));
-                        else
-                            linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, Convert.ChangeType(kv.Value, property));
-                    }
-                }
-                catch (InvalidCastException)
-                {
-                    try
-                    {
-                        if (isField)                       
-                            linkToObject.GetType().GetField(keyName).SetValue(linkToObject, ConvertProperties(property, (Dictionary<object, object>)kv.Value, 0, isArr));                      
-                        else
+                        if (kv.Value is object[] castAsArr)
                         {
-                            if (kv.Value is object[] castAsArr)
-                            {
-                                var list = (IList)Activator.CreateInstance(property.GetGenericTypeDefinition().MakeGenericType(property.GetGenericArguments().Single()));
-                                for (int i = 0; i < castAsArr.Length; i++)
-                                {
-                                    var converted = ConvertProperties(property, (Dictionary<object, object>)castAsArr[i], 0, true) as IList;
-                                    list.Add(converted[0]);
-                                }
+                            var list = (IList)Activator.CreateInstance(property.GetGenericTypeDefinition().MakeGenericType(property.GetGenericArguments().Single()));
+                            for (int i = 0; i < castAsArr.Length; i++)
+                                list.Add((ConvertProperties(property, (Dictionary<object, object>)castAsArr[i], 0, true) as IList)[0]);
 
-                                linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, list);
-                            }
-                            else if (kv.Value is Dictionary<object, object> castAsDict)
-                                linkToObject.GetType().GetProperty(keyName).SetValue(linkToObject, ConvertProperties(property, castAsDict));
+                            propInfo.SetValue(linkToObject, list);
                         }
+                        else if (kv.Value is Dictionary<object, object> castAsDict)
+                            propInfo.SetValue(linkToObject, ConvertProperties(property, castAsDict));
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Log.Error(ex);
+                        if (property.Equals(typeof(Guid)))
+                            propInfo.SetValue(linkToObject, Guid.Parse(kv.Value.ToString()));
+                        else if (property.Equals(typeof(Vector3)))
+                            propInfo.SetValue(linkToObject, (Vector3)kv.Value);
+                        else if (property.Equals(typeof(Angle)))
+                            propInfo.SetValue(linkToObject, (Angle)kv.Value);
+                        else if (property.IsEnum)
+                            propInfo.SetValue(linkToObject, Enum.Parse(property, kv.Value.ToString()));
+                        else
+                            propInfo.SetValue(linkToObject, Convert.ChangeType(kv.Value, property));
                     }
+
+                }
+                catch (InvalidCastException ex)
+                {
+                    Log.Error(ex);
                 }
                 catch (Exception ex)
                 {
@@ -162,6 +148,30 @@ namespace SuperProxy.Network.Serialization.Delegate
             }
 
             return activated;
+        }
+
+        public class PropField
+        {
+            private PropertyInfo _propInfo;
+            private FieldInfo _fieldInfo;
+
+            public PropField(PropertyInfo propInfo)
+            {
+                _propInfo = propInfo;
+            }
+
+            public PropField(FieldInfo fieldInfo)
+            {
+                _fieldInfo = fieldInfo;
+            }
+
+            public void SetValue(object obj, object value)
+            {
+                if (_propInfo != null)
+                    _propInfo.SetValue(obj, value);
+                if (_fieldInfo != null)
+                    _fieldInfo.SetValue(obj, value);
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using SuperProxy.Collection.RemoteReplication;
 using SuperProxy.Network;
+using System.Collections;
 using System.Collections.Specialized;
 
 namespace SuperProxy.Collection
@@ -12,16 +13,18 @@ namespace SuperProxy.Collection
     {
         private SPClient _client;
         private string _objectName;
+        private bool _onUpdateSequence;
 
         public RpList() : base()
         {
         }
 
         public T this[int index] => _observableLockedList[index];
+        public bool Exist(T item) => _observableLockedList.Contains(item);
         public void Add(T item) => _observableLockedList.Add(item);
         public void Remove(T item) => _observableLockedList.Remove(item);
         public void RemoveAt(int index) => _observableLockedList.RemoveAt(index);
-
+        
         public void InstallClient(SPClient client, string objectName) 
         {
             InstallARPList();
@@ -30,6 +33,25 @@ namespace SuperProxy.Collection
             _objectName = objectName;
         }
 
-        public override void OnObservableListChanged(object sender, NotifyCollectionChangedEventArgs ev) => _client?.RemoteListWillUpdate(ev, _objectName);
+        public void UpdateReceive(IList newItems, IList oldItems)
+        {
+            _onUpdateSequence = true;
+
+            if(oldItems.Count > 0)            
+                foreach (var oldItem in oldItems)
+                    Remove((T) oldItem);
+
+            if (newItems.Count > 0)
+                foreach (var newItem in newItems)
+                    Add((T)newItem);
+
+            _onUpdateSequence = false;
+        }
+
+        public override void OnObservableListChanged(object sender, NotifyCollectionChangedEventArgs ev)
+        {
+            if(!_onUpdateSequence)
+                _client?.RemoteListWillUpdate(ev, _objectName);
+        }
     }
 }

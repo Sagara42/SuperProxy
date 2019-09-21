@@ -8,9 +8,11 @@ using SuperProxy.Network.Messages;
 using SuperProxy.Network.Messages.Events;
 using SuperProxy.Network.Serialization.Delegate;
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -38,6 +40,8 @@ namespace SuperProxy.Network
 
         private ConcurrentDictionary<string, RemoteEventWait> _remoteMethodCallbacks;
 
+        private ConcurrentDictionary<string, object> _activatedReplicationObjects;
+
         private List<string> _remoteReplicationObjects;
 
         private readonly SemaphoreSlim _sockSem;
@@ -50,6 +54,7 @@ namespace SuperProxy.Network
             _subsribedActions = new ConcurrentDictionary<string, Action<PublishEvent>>();
             _remoteMethodCallbacks = new ConcurrentDictionary<string, RemoteEventWait>();
             _mountedHostedMethods = new ConcurrentDictionary<string, RemoteMethodEvent>();
+            _activatedReplicationObjects = new ConcurrentDictionary<string, object>();
             _remoteReplicationObjects = new List<string>();
             _sockSem = new SemaphoreSlim(1, 1);
             _rmiChannel = "";
@@ -117,6 +122,8 @@ namespace SuperProxy.Network
 
         public async Task<T> RemoteCall<T>(string channel, string identifier, params object[] param)
         {
+            var sw = Stopwatch.StartNew();
+
             var callbackGuid = Guid.NewGuid().ToString();
 
             _remoteMethodCallbacks.TryAdd(callbackGuid, new RemoteEventWait());
@@ -136,14 +143,25 @@ namespace SuperProxy.Network
 
             var typeofImplicit = typeof(T);
 
-            if (result.Data.GetType().IsGenericType && !typeofImplicit.IsGenericType)
-                return (T)Activator.CreateInstance(typeofImplicit).GetType().ConvertProperties((Dictionary<object, object>)result.Data);              
+            sw.Stop();
 
-            return (T)result.Data;
+            if (result.Data.GetType().IsGenericType && !typeofImplicit.IsGenericType)
+            {              
+                var miResult = (T)Activator.CreateInstance(typeofImplicit).GetType().ConvertProperties((Dictionary<object, object>)result.Data);
+
+                _log.Debug($"Remote call object {identifier} time is {sw.ElapsedMilliseconds / (float)1000} seconds");
+
+                return miResult;
+            }
+
+            _log.Debug($"Remote call object {identifier} time is {sw.ElapsedMilliseconds / (float)1000} seconds");
+
+            return (T) Convert.ChangeType(result.Data, typeof(T));
         }
 
         public async Task RemoteCall(string channel, string identifier, params object[] param)
         {
+            var sw = Stopwatch.StartNew();
             var callbackGuid = Guid.NewGuid().ToString();
 
             _remoteMethodCallbacks.TryAdd(callbackGuid, new RemoteEventWait());
@@ -165,6 +183,10 @@ namespace SuperProxy.Network
            
             _remoteMethodCallbacks[callbackGuid].Event.WaitOne();
             _remoteMethodCallbacks.TryRemove(callbackGuid, out _);
+
+            sw.Stop();
+
+            _log.Debug($"Remote call object {identifier} time is {(sw.ElapsedMilliseconds / (float)1000)} seconds");
         }
 
         private void MountHostedObject()
@@ -210,7 +232,23 @@ namespace SuperProxy.Network
 
                         _selfHosted.GetType().GetProperty(field.Name).SetValue(_selfHosted, activatedProperty);
                         _remoteReplicationObjects.Add(attribute.ObjectName);
+
+                        if (!_activatedReplicationObjects.ContainsKey(attribute.ObjectName))
+                            _activatedReplicationObjects.TryAdd(attribute.ObjectName, activatedProperty);
                     }
+                }
+                else if(field.GetCustomAttribute(typeof(SPReplicationAttribute)) is SPReplicationAttribute attr)
+                {
+                    var installClient = field.PropertyType.GetMethod("InstallClient");
+                    var activatedProperty = Activator.CreateInstance(field.PropertyType);
+
+                    installClient.Invoke(activatedProperty, new object[] { this, attr.ObjectName });
+
+                    _selfHosted.GetType().GetProperty(field.Name).SetValue(_selfHosted, activatedProperty);
+                    _remoteReplicationObjects.Add(attr.ObjectName);
+
+                    if (!_activatedReplicationObjects.ContainsKey(attr.ObjectName))
+                        _activatedReplicationObjects.TryAdd(attr.ObjectName, activatedProperty);
                 }
             }
         }
@@ -219,13 +257,50 @@ namespace SuperProxy.Network
         #region Replication methods
 
         public void RemoteListWillUpdate(NotifyCollectionChangedEventArgs ev, string objectName) => SendData(SerializeMessagePackToFrame(new ReplicationListUpdateEvent() { Channel = _rmiChannel, ObjectName = objectName, NewItems = ev.NewItems, OldItems = ev.OldItems }));
-        
+
+        public void PrimitiveWillUpdate(string objectName, object value) => SendData(SerializeMessagePackToFrame(new ReplicationPrimitiveUpdateEvent() { ObjectName = objectName, Value = value }));
+
         private void ListUpdateEvent(ReplicationListUpdateEvent ev)
         {
             var prop = _selfHosted.GetType().GetProperties().FirstOrDefault(s =>
             s.GetCustomAttribute(typeof(SPGenericReplicationAttribute)) != null &&
             s.GetCustomAttribute<SPGenericReplicationAttribute>().ObjectName == ev.ObjectName).PropertyType;
-            //TODO! Update local hosted object
+
+            if (prop != null && prop.IsGenericType)
+            {
+                var baseTypeDefinition = prop.GenericTypeArguments[0];
+
+                var newItems = Activator.CreateInstance(typeof(List<>).MakeGenericType(baseTypeDefinition)) as IList;
+                var oldItems = Activator.CreateInstance(typeof(List<>).MakeGenericType(baseTypeDefinition)) as IList;
+
+                if (ev.NewItems != null)
+                {
+                    newItems = ev.NewItems;
+                    for (int i = 0; i < ev.NewItems.Count; i++)
+                        newItems[i] = Activator.CreateInstance(baseTypeDefinition).GetType().ConvertProperties((Dictionary<object, object>)newItems[i]);
+                }
+
+                if (ev.OldItems != null)
+                {
+                    oldItems = ev.OldItems;
+                    for (int i = 0; i < ev.OldItems.Count; i++)
+                        oldItems[i] = Activator.CreateInstance(baseTypeDefinition).GetType().ConvertProperties((Dictionary<object, object>)oldItems[i]);
+                }
+
+                if (_activatedReplicationObjects.ContainsKey(ev.ObjectName))                
+                    _activatedReplicationObjects[ev.ObjectName].GetType().GetMethod("UpdateReceive").Invoke(_activatedReplicationObjects[ev.ObjectName], new object[] { newItems, oldItems });                
+            }
+        }
+
+        private void PrimitiveUpdateEvent(ReplicationPrimitiveUpdateEvent ev)
+        {
+            var prop = _selfHosted.GetType().GetProperties().FirstOrDefault(s => s.GetCustomAttribute(typeof(SPReplicationAttribute)) != null && s.GetCustomAttribute<SPReplicationAttribute>().ObjectName == ev.ObjectName).PropertyType;
+            if(prop != null)            
+                if (_activatedReplicationObjects.ContainsKey(ev.ObjectName))
+                {
+                    var methodInfo = _activatedReplicationObjects[ev.ObjectName].GetType().GetMethod("UpdateReceive");
+                    methodInfo.Invoke(_activatedReplicationObjects[ev.ObjectName], new object[] { ev.Value });
+                }   
         }
 
         #endregion
@@ -290,6 +365,9 @@ namespace SuperProxy.Network
                                 break;
                             case ReplicationListUpdateEvent replicationListEvent:
                                 ListUpdateEvent(replicationListEvent);
+                                break;
+                            case ReplicationPrimitiveUpdateEvent primitiveEvent:
+                                PrimitiveUpdateEvent(primitiveEvent);
                                 break;
                         }
                     });

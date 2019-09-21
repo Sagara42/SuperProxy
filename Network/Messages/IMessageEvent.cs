@@ -10,6 +10,7 @@ namespace SuperProxy.Network.Messages
     [Union(4, typeof(RMINotyfiEvent))]
     [Union(5, typeof(ReplicationListUpdateEvent))]
     [Union(6, typeof(ReplicationNotyfiEvent))]
+    [Union(7, typeof(ReplicationPrimitiveUpdateEvent))]
     public interface IMessageEvent
     {
     }

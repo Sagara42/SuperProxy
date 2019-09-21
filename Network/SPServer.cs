@@ -2,7 +2,6 @@
 using NLog;
 using SuperProxy.Collection;
 using SuperProxy.Events;
-using SuperProxy.Extensions;
 using SuperProxy.Network.Messages;
 using SuperProxy.Network.Messages.Events;
 using System;
@@ -115,9 +114,6 @@ namespace SuperProxy.Network
                     while (r < packetDataBuffer.Length)
                         r += connection.Socket.Receive(packetDataBuffer, r, packetDataBuffer.Length - r, SocketFlags.None);
 
-#if DEBUG
-                    _log.Debug($"Data received:\n{packetDataBuffer.FormatHex()}");
-#endif
                     ThreadPool.QueueUserWorkItem((callback) => 
                     {
                         var message = MessagePackSerializer.Deserialize<IMessageEvent>(packetDataBuffer);
@@ -147,6 +143,9 @@ namespace SuperProxy.Network
                                 break;
                             case ReplicationNotyfiEvent repNotyfi:
                                 ReplicationEventAggregator.SetReplicationInfo(connection, repNotyfi.Channel, repNotyfi.ObjectsToReplicate);
+                                break;
+                            case ReplicationPrimitiveUpdateEvent primitiveUpdateEvent:
+                                ReplicationEventAggregator.DispatchPrimitiveReplicationInfo(connection, primitiveUpdateEvent);
                                 break;
                         }
                     });
@@ -178,6 +177,7 @@ namespace SuperProxy.Network
             {
                 EventAggregator.UnsubscribeFromAllChannels(client);
                 RemoteMethodEventAggregator.UnsubscribeFromAllChannels(client);
+                ReplicationEventAggregator.ReleaseClient(client);
 
                 client.Reset();
                 client.Socket.BeginDisconnect(false, EndDisconect, client);
