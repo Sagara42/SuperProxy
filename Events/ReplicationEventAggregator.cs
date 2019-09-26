@@ -9,7 +9,7 @@ namespace SuperProxy.Events
     {
         private static ConcurrentDictionary<SPClient, List<string>> _replicationInfos = new ConcurrentDictionary<SPClient, List<string>>();
 
-        public static void SetReplicationInfo(SPClient client, string channel, List<string> objectNames)
+        public static void SetReplicationInfo(SPClient client, List<string> objectNames)
         {
             if (!_replicationInfos.ContainsKey(client))
                 _replicationInfos.TryAdd(client, objectNames);
@@ -18,7 +18,6 @@ namespace SuperProxy.Events
         public static void DispatchGenericReplicationInfo(SPClient client, ReplicationListUpdateEvent genericReplicationInfo)
         {
             var objectName = genericReplicationInfo.ObjectName;
-            var channel = genericReplicationInfo.Channel;
 
             foreach(var ri in _replicationInfos)
             {

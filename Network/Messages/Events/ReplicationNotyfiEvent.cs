@@ -7,6 +7,5 @@ namespace SuperProxy.Network.Messages.Events
     public class ReplicationNotyfiEvent : IMessageEvent
     {
         [Key(0)] public List<string> ObjectsToReplicate { get; set; }
-        [Key(1)] public string Channel { get; set; }
     }
 }

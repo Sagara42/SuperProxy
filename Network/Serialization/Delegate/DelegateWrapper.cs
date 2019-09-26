@@ -1,5 +1,4 @@
 ﻿using NLog;
-using SuperProxy.Extensions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -128,14 +127,11 @@ namespace SuperProxy.Network.Serialization.Delegate
                             propInfo.SetValue(linkToObject, Guid.Parse(kv.Value.ToString()));
                         else if (property.Equals(typeof(Vector3)))
                             propInfo.SetValue(linkToObject, (Vector3)kv.Value);
-                        else if (property.Equals(typeof(Angle)))
-                            propInfo.SetValue(linkToObject, (Angle)kv.Value);
                         else if (property.IsEnum)
                             propInfo.SetValue(linkToObject, Enum.Parse(property, kv.Value.ToString()));
                         else
                             propInfo.SetValue(linkToObject, Convert.ChangeType(kv.Value, property));
                     }
-
                 }
                 catch (InvalidCastException ex)
                 {

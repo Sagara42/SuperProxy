@@ -142,7 +142,7 @@ namespace SuperProxy.Network
                                 ReplicationEventAggregator.DispatchGenericReplicationInfo(connection, repListEvent);
                                 break;
                             case ReplicationNotyfiEvent repNotyfi:
-                                ReplicationEventAggregator.SetReplicationInfo(connection, repNotyfi.Channel, repNotyfi.ObjectsToReplicate);
+                                ReplicationEventAggregator.SetReplicationInfo(connection, repNotyfi.ObjectsToReplicate);
                                 break;
                             case ReplicationPrimitiveUpdateEvent primitiveUpdateEvent:
                                 ReplicationEventAggregator.DispatchPrimitiveReplicationInfo(connection, primitiveUpdateEvent);

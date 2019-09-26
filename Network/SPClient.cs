@@ -27,6 +27,7 @@ namespace SuperProxy.Network
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
+        #region Properties
         public Guid NetIdentity { get; set; }
         public Socket Socket { get; set; }
         public byte[] WaitPacketLength { get; set; }
@@ -34,6 +35,9 @@ namespace SuperProxy.Network
         private string _rmiChannel { get; set; }
         private object _selfHosted { get; set; }
 
+        #endregion
+
+        #region Fields
         private ConcurrentDictionary<string, Action<PublishEvent>> _subsribedActions;
 
         private ConcurrentDictionary<string, RemoteMethodEvent> _mountedHostedMethods;
@@ -45,6 +49,7 @@ namespace SuperProxy.Network
         private List<string> _remoteReplicationObjects;
 
         private readonly SemaphoreSlim _sockSem;
+        #endregion
 
         public SPClient()
         {
@@ -107,9 +112,10 @@ namespace SuperProxy.Network
 
                     if (isGenericType)
                         parameters[i] = localParameter.ConvertProperties((Dictionary<object, object>)parameters[i]);
+                    else if (localParameter.Equals(typeof(Guid)))
+                        parameters[i] = Guid.Parse(parameters[i].ToString());
                     else
-                        parameters[i] = Convert.ChangeType(parameters[i], localParameter);
-            
+                        parameters[i] = Convert.ChangeType(parameters[i], localParameter);            
                 }
 
                 var result = await targetMethod.Method.InvokeWrapper(targetMethod.HasAsyncResult, _selfHosted, parameters.ToArray());
@@ -396,7 +402,7 @@ namespace SuperProxy.Network
 
         private void NotyfiServerAboutReadyForRMI() => SendData(SerializeMessagePackToFrame(new RMINotyfiEvent() { Channel = _rmiChannel, MethodNames = _mountedHostedMethods.Keys.ToArray() }));
 
-        private void NotyfiServerAboutReplicationInfos() => SendData(SerializeMessagePackToFrame(new ReplicationNotyfiEvent() { Channel = _rmiChannel, ObjectsToReplicate = _remoteReplicationObjects }));
+        private void NotyfiServerAboutReplicationInfos() => SendData(SerializeMessagePackToFrame(new ReplicationNotyfiEvent() { ObjectsToReplicate = _remoteReplicationObjects }));
        
         public void SentRemoteMethodCall(RemoteMethodEvent remoteEvent) => SendData(SerializeMessagePackToFrame(remoteEvent));
 

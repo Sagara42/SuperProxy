@@ -3,3 +3,6 @@ obj/
 
 bin/
 /.vs/SuperProxy/v16
+/Properties/PublishProfiles
+/.vs/SuperProxy/DesignTimeBuild
+/SuperProxy.csproj.user
